@@ -45,7 +45,7 @@ void setup() {
 
     for (int i=MP3TRIGGER; i<=IdleSound; i++) {
         pinMode(i, OUTPUT);
-        digitalWrite(i, HIGH); // HIGH is "nothing", LOW is "trigger"
+        digitalWrite(i, HIGH); // HIGH is "do nothing", LOW is "trigger"
         }
     digitalWrite(IdleSound, LOW);
 
@@ -56,21 +56,57 @@ void setup() {
 
 
 void loop() {
- 
+        reset_to_sound(7);
+        delay(2000);
+        reset_to_sound(8);
+        delay(2000);
+        }
+    
+void xloop() {
+
     bool p1 = Pir1.check();
     bool p2 = Pir2.check();
 
-    // So, On, WaitOff is ON
+    // We want a progression of sounds:
+    // idle -> idle sound
+    // idle, det1 -> "intro sound"
+    // det1 + det2 -> vigorous
+    // det1&det2 - det1 -> bye-sound
     if (p1 && p2) {
         // ON
         digitalWrite(ONBOARD,HIGH);
     }
     else if (p1 || p2) {
-      digitalWrite(ONBOARD, ((millis()/300) % 2) ? HIGH : LOW);
+        digitalWrite(ONBOARD, ((millis()/300) % 2) ? HIGH : LOW);
+        reset_to_sound(MP3TRIGGER);
     }
     else {
         digitalWrite(ONBOARD,LOW);
+        reset_to_sound(IdleSound);
     }
+}
+
+void reset_to_sound(int want_pin) {
+    static int last_pin = 0;
+
+    // Avoid doing anything if no change
+    if (last_pin == want_pin) { return; }
+
+    Serial.print("Pin ");Serial.print(want_pin);Serial.print(" was ");Serial.println(last_pin);
+
+    last_pin = want_pin;
+
+    // Have to turn off the sound before turning on the next
+    for (int i=MP3TRIGGER; i<=IdleSound; i++) {
+        Serial.print(i);
+        digitalWrite(i, HIGH); // "donothing"
+        // digitalWrite(i, LOW); // pullup off
+        // pinMode(i, INPUT); // "open"==pull-up=="donothing"
+        }
+    Serial.println();
+
+    digitalWrite(want_pin, LOW); // HIGH is "nothing", LOW is "trigger"
+    Serial.print("->");Serial.println(want_pin);
 }
 
 bool Pir::check() {
