@@ -17,12 +17,6 @@ const int MovementSoundCounts[] = {1,1,1,0}; // how many sounds in each "zone", 
 // see IdleSounds, and setup_sound_lists()
 const int IdleSoundCount = 3;
 
-const int MP3TRIGGER=1; // we use MP3TRIGGER..IdleSound pins
-const int MovementSounds=3; // +0..2 are the movement cases
-const int IdleSound=MP3TRIGGER + MovementSounds; // idlesound pin
-const int IdleOnMP3=MovementSounds+1; // Which trigger on the mp3, just for reference
-
-
 const int PirDebounceOn = 600; // millis
 const int PirDebounceOff = 1000; // millis till it allows -> Off
 
@@ -65,18 +59,19 @@ void setup() {
     pinMode(ONBOARD, OUTPUT);
     digitalWrite(ONBOARD,LOW);
 
-    Serial.print("Sounds start at digital ");Serial.print(MP3TRIGGER);Serial.print(", idle-sound is digital ");Serial.print(IdleSound);Serial.print(" which is the TRIG");Serial.println(IdleOnMP3);
+    setup_sound_lists(); // let it print the zones/sound-nums
 
     MP3.begin(38400);
     MP3.listen();
+
+    Serial.println();
     mp3_ask("MP3: ","S0");
     mp3_ask("tracks: ","S1");
 
-    setup_sound_lists();
     player.rand_play(IdleSounds);
 
     Serial.println("Stabilize...");
-    // delay(2000);
+    delay(2000);
     Serial.println("Start");
 }
 
@@ -110,7 +105,9 @@ void setup_sound_lists() {
 
         int *zone = MovementSound[zone_i];
 
-        Serial.print("Zone ");Serial.print(zone_i);Serial.print(" ");Serial.print((unsigned int) zone);Serial.print(" count "); Serial.print(MovementSoundCounts[zone_i]); Serial.print(" start sound_num ");Serial.println(next_sound_num);
+        Serial.print("Zone ");Serial.print(zone_i);
+        // Serial.print(" "); Serial.print((unsigned int) zone); Serial.print(" count "); Serial.print(MovementSoundCounts[zone_i]); Serial.print(" start sound_num ");
+        Serial.print(" from ");Serial.print(next_sound_num);
 
         // Fill it now, from last sound_num
         int sound_i;
@@ -120,22 +117,26 @@ void setup_sound_lists() {
         }
         sound_i -= 1;
         zone[sound_i + 1] = 0; // terminate it
-        Serial.print("Zone ");Serial.print(zone_i);Serial.print(" last soundnum "); Serial.println( zone[sound_i] );
+        // Serial.print("Zone ");Serial.print(zone_i);
+        // Serial.print(" last soundnum "); 
+        Serial.print(" to ");Serial.println( zone[sound_i] );
     }
 
 
     // setup IdleSounds, after a gap
     next_sound_num++;
 
-    Serial.print("IdleSound start num @");Serial.print((unsigned int) IdleSounds);Serial.print(" ");Serial.println(next_sound_num);
+    Serial.print("IdleSound from ");
+    // Serial.print("@");Serial.print((unsigned int) IdleSounds);Serial.print(" ");
+    Serial.print(next_sound_num);
 
     int idle_i;
     for (idle_i=0; idle_i<IdleSoundCount; idle_i++) {
-        Serial.print("  ");Serial.print(idle_i);Serial.print(" = ");Serial.println(next_sound_num);
+        // Serial.print("  ");Serial.print(idle_i);Serial.print(" = ");Serial.print(next_sound_num);
         IdleSounds[idle_i] = next_sound_num++;
     }
     IdleSounds[idle_i] = 0; // terminate list
-    Serial.print("Idle last soundnum "); Serial.println( IdleSounds[idle_i-1] );
+    Serial.print(" to "); Serial.println( IdleSounds[idle_i-1] );
 }
 
 char mp3_ask(const char *msg, const char *cmd) {
@@ -165,7 +166,7 @@ void Player::rand_play(const int* sound_list) {
         sound_len = term_array_len(sound_list); // could cache this
         this->was_sound_list = sound_list; // a flag, so we know if we have to re-start
         this->sound_idx = random(sound_len);
-        Serial.print(millis()); Serial.print("First idx from ");Serial.print((unsigned int)sound_list);Serial.print(" len ");Serial.print(sound_len);Serial.print(" -> ");Serial.println(sound_idx);
+        Serial.print(millis()); Serial.print(" First idx from ");Serial.print((unsigned int)sound_list);Serial.print(" len ");Serial.print(sound_len);Serial.print(" -> ");Serial.println(sound_idx);
         MP3.print("T");MP3.print( sound_list[sound_idx] );
         return;
         }
@@ -188,7 +189,7 @@ void Player::rand_play(const int* sound_list) {
     // mod so back to 0..2 (being not the original sound_idx), 
     // and index is 0 based so done
     int offset = random(sound_len - 1) + 1;
-    Serial.print("(was ");Serial.print(sound_idx);Serial.print(" offset will be ");Serial.print(offset);Serial.print(" sum ");Serial.print(sound_idx + offset);Serial.print(" mod ");Serial.println( ( sound_idx + offset) % sound_len );
+    // Serial.print("(was ");Serial.print(sound_idx);Serial.print(" offset will be ");Serial.print(offset);Serial.print(" sum ");Serial.print(sound_idx + offset);Serial.print(" mod ");Serial.println( ( sound_idx + offset) % sound_len );
     this->sound_idx = ( sound_idx + offset) % sound_len;
     Serial.print(millis()); Serial.print(" Next idx ");Serial.print(sound_idx);Serial.print("/");Serial.print(sound_len); Serial.print(" sound_num ");Serial.println( sound_list[sound_idx]);
 
