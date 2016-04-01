@@ -247,6 +247,7 @@ bool Pir::check() {
     // returns true if "on"
     int pirVal = digitalRead(pin);
 
+    // FIXME: debounce may be wrong: maybe more like average state (1->0->1->0... seems common during motion)
     // States: debounce on / off
     // Off -> movement for wait_on -> On
     //     <- nothing
