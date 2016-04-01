@@ -31,13 +31,11 @@ const int PirNothing = 1;
 const int PirMovement = 0;
 
 struct Player {
-    const int* sound_list = NULL;
     const int* was_sound_list = (const int*) -1; // so it starts different from sound_list
     int sound_idx;
 
     // the list is a string of the digits of interest "1", "345", etc.
-    void sounds(const int* sound_list) { this->sound_idx=-1; this->sound_list=sound_list; }
-    void rand_play();
+    void rand_play(const int* sound_list);
     };
 
 struct Pir {
@@ -75,8 +73,7 @@ void setup() {
     mp3_ask("tracks: ","S1");
 
     setup_sound_lists();
-    player.sounds(IdleSounds);
-    player.rand_play();
+    player.rand_play(IdleSounds);
 
     Serial.println("Stabilize...");
     // delay(2000);
@@ -158,16 +155,14 @@ char mp3_ask(const char *msg, const char *cmd) {
 }
 
 
-void Player::rand_play(const int* sounds) {
+void Player::rand_play(const int* sound_list) {
     // you should repeatedly call this, and it will play the next random sound when the previous finishes
 
-    // we are safe
-    if (sound_list == NULL) { return; }
-
-    int sound_len = term_array_len(sound_list); // could cache this
+    int sound_len; // delay calculating
 
     // start, pick one
     if (was_sound_list != sound_list) {
+        sound_len = term_array_len(sound_list); // could cache this
         this->was_sound_list = sound_list; // a flag, so we know if we have to re-start
         this->sound_idx = random(sound_len);
         Serial.print(millis()); Serial.print("First idx from ");Serial.print((unsigned int)sound_list);Serial.print(" len ");Serial.print(sound_len);Serial.print(" -> ");Serial.println(sound_idx);
@@ -185,6 +180,8 @@ void Player::rand_play(const int* sounds) {
         Serial.print(millis()); Serial.print(" mp3 didn't finish: ");Serial.println(v);
         return;
         }
+
+    sound_len = term_array_len(sound_list); // could cache this
 
     // e.g. if sound_len is 3, subtract one so it's like 0,1,2
     // add rand(1 or 2), 
@@ -213,18 +210,17 @@ void loop() {
     if (p1 && p2) {
         // ON
         digitalWrite(ONBOARD, HIGH);
-        player.sounds(MovementSound[0]);
+        player.rand_play(MovementSound[0]);
     }
     else if (p1 || p2) {
         digitalWrite(ONBOARD, ((millis()/300) % 2) ? HIGH : LOW);
-        player.sounds(MovementSound[1]);
+        player.rand_play(MovementSound[1]);
     }
     else {
         digitalWrite(ONBOARD,LOW);
-        player.sounds(IdleSounds);
+        player.rand_play(IdleSounds);
     }
 
-    player.rand_play();
 }
 
 bool Pir::check() {
