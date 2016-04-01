@@ -3,26 +3,26 @@
 // White = Ground => GND
 // Black = Alarm => (digital) pin 2 & 4 (don't use pwm pins?)
 
+#include <SoftwareSerial.h>
+extern int __bss_end;
+extern void *__brkval;
+
+
 const int PIR1_PIN=2;
 const int PIR2_PIN=4;
-const int ONBOARD=13;
+const int PirDebounceOn = 600; // millis
+const int PirDebounceOff = 1000; // millis till it allows -> Off
 
-#include <SoftwareSerial.h>
-const int RX=10, TX=11;
+const int ONBOARD=13; // the on-board led for subtle signalling: ON=1&2, blink=1||2, off=no movement
+const int RX=10, TX=11; // for the MP3 board
 
 // Each "zone" of movement (can have several sounds, will be randomly chosen/looped among)
 // See MovementSound, and setup_sound_lists()
 const int MovementSoundCounts[] = {1,1,1,0}; // how many sounds in each "zone", terminate list with 0
-// Idle sounds, start at last-movement-sound + 2 (there's a gap)
+// Idle sounds, start at last_movement_sound + 2 (there's a gap)
 // see IdleSounds, and setup_sound_lists()
-const int IdleSoundCount = 3;
+const int IdleSoundCount = 3; // how many sounds for idling
 
-const int PirDebounceOn = 600; // millis
-const int PirDebounceOff = 1000; // millis till it allows -> Off
-
-enum Pir_State { Off, WaitOn, On, WaitOff };
-const int PirNothing = 1;
-const int PirMovement = 0;
 
 struct Player {
     const int* was_sound_list = (const int*) -1; // so it starts different from sound_list
@@ -32,11 +32,14 @@ struct Player {
     void rand_play(const int* sound_list);
     };
 
+enum Pir_State { Off, WaitOn, On, WaitOff };
+const int PirNothing = 1; // from digitalRead(pir)
+const int PirMovement = 0; // from digitalRead(pir)
 struct Pir {
     int pin;
     Pir_State pir_state;
     unsigned long wait_on, wait_off; // don't need init
-    int was;
+    int was; // last digitalRead, PirNothing || PirMovement
 
     Pir(int a_pin) : pin(a_pin), pir_state(Off), was(-1) {}
     void init() { pinMode(pin, INPUT_PULLUP); }
@@ -59,7 +62,10 @@ void setup() {
     pinMode(ONBOARD, OUTPUT);
     digitalWrite(ONBOARD,LOW);
 
+    Serial.print(F("Free memory "));Serial.println(get_free_memory());
     setup_sound_lists(); // let it print the zones/sound-nums
+    Serial.print(F("Free memory "));Serial.println(get_free_memory());
+
 
     MP3.begin(38400);
     MP3.listen();
@@ -75,6 +81,19 @@ void setup() {
     Serial.println("Start");
 }
 
+int get_free_memory()
+{
+  int free_memory;
+
+  if((int)__brkval == 0)
+    free_memory = ((int)&free_memory) - ((int)&__bss_end);
+  else
+    free_memory = ((int)&free_memory) - ((int)__brkval);
+
+  return free_memory;
+}
+
+// How long is an array that is terminated by a 0 (or null):
 int term_array_len(const int *list) {
     int i;
     for (i=0; list[i] != 0; i++) {};
@@ -140,7 +159,7 @@ void setup_sound_lists() {
 }
 
 char mp3_ask(const char *msg, const char *cmd) {
-    // We return the last char, because sometimes that's useful
+    // We return the last char, because sometimes that's useful(?)
     char v = 0;
 
     Serial.print(msg);
