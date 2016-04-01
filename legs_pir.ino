@@ -7,10 +7,14 @@ const int PIR1_PIN=2;
 const int PIR2_PIN=4;
 const int ONBOARD=13;
 
-const int MP3TRIGGER=5; // we use MP3TRIGGER..IdleSound pins
+#include <SoftwareSerial.h>
+const int RX=10, TX=11;
+
+const int MP3TRIGGER=1; // we use MP3TRIGGER..IdleSound pins
 const int MovementSounds=3; // +0..2 are the movement cases
 const int IdleSound=MP3TRIGGER + MovementSounds; // idlesound pin
 const int IdleOnMP3=MovementSounds+1; // Which trigger on the mp3, just for reference
+
 
 const int PirDebounceOn = 600; // millis
 const int PirDebounceOff = 1000; // millis till it allows -> Off
@@ -18,6 +22,16 @@ const int PirDebounceOff = 1000; // millis till it allows -> Off
 enum Pir_State { Off, WaitOn, On, WaitOff };
 const int PirNothing = 1;
 const int PirMovement = 0;
+
+struct Player {
+    const char* sound_list = NULL;
+    const char* was_sound_list = (const char*) -1; 
+    int sound_idx;
+
+    // the list is a string of the digits of interest "1", "345", etc.
+    void sounds(const char* sound_list) { this->sound_idx=-1; this->sound_list=sound_list; }
+    void rand_play();
+    };
 
 struct Pir {
     int pin;
@@ -33,6 +47,9 @@ struct Pir {
 
 Pir Pir1(PIR1_PIN);
 Pir Pir2(PIR2_PIN);
+SoftwareSerial MP3(RX,TX);
+Player player;
+
 
 void setup() {
     Serial.begin(115200);
@@ -43,25 +60,73 @@ void setup() {
 
     Serial.print("Sounds start at digital ");Serial.print(MP3TRIGGER);Serial.print(", idle-sound is digital ");Serial.print(IdleSound);Serial.print(" which is the TRIG");Serial.println(IdleOnMP3);
 
-    for (int i=MP3TRIGGER; i<=IdleSound; i++) {
-        pinMode(i, OUTPUT);
-        digitalWrite(i, HIGH); // HIGH is "do nothing", LOW is "trigger"
-        }
-    digitalWrite(IdleSound, LOW);
+    MP3.begin(38400);
+    MP3.listen();
+    mp3_ask("MP3: ","S0");
+    mp3_ask("tracks: ","S1");
+
+    Serial.print(millis()); Serial.print(" T");Serial.println(IdleSound+1);
+    player.sounds("567");
+    player.rand_play();
 
     Serial.println("Stabilize...");
-    delay(2000);
+    // delay(2000);
     Serial.println("Start");
 }
 
+void mp3_ask(const char *msg, const char *cmd) {
+    Serial.print(msg);
+    MP3.print(cmd);
+    while (MP3.available() < 1) {}
+    while (MP3.available() > 0) {
+        char v = MP3.read();
+        Serial.print(v);
+        delay(10);
+        }
+    Serial.println();
+}
 
 void loop() {
-        reset_to_sound(7);
-        delay(2000);
-        reset_to_sound(8);
-        delay(2000);
+        player.rand_play();
         }
-    
+
+void Player::rand_play() {
+    // you should repeatedly call this, and it will play the next random sound when the previous finishes
+
+    // we are safe
+    if (sound_list == NULL) { return; }
+
+    int sound_len = strlen(sound_list); // could cache this
+
+    // start, pick one
+    if (was_sound_list != sound_list) {
+        this->was_sound_list = sound_list; // a flag, so we know if we have to re-start
+        this->sound_idx = random(sound_len);
+        Serial.print("First idx from ");Serial.print(sound_list);Serial.print(" -> ");Serial.println(sound_idx);
+        MP3.print("T");MP3.print( sound_list[sound_idx] );
+        return;
+        }
+
+    // Must be playing, so wait
+    if (MP3.available() < 1) { return; }
+
+    // Expect an 'X' for "done"
+    char v = MP3.read();
+    if (v != 'X') {
+        Serial.print("mp3 didn't finish: ");Serial.println(v);
+        return;
+        }
+
+    // e.g. if sound_len is 3, subtract one so it's like 0,1,2
+    // add rand(1 or 2), 
+    // mod so back to 0..2 (being not the original sound_idx), 
+    // and index is 0 based so done
+    this->sound_idx = ( sound_idx + (random(sound_len - 1) + 1)) % sound_len;
+    Serial.print("Next idx ");Serial.println(sound_idx);
+
+    MP3.print("T");MP3.print( sound_list[sound_idx] );
+}
+
 void xloop() {
 
     bool p1 = Pir1.check();
@@ -99,13 +164,13 @@ void reset_to_sound(int want_pin) {
     // Have to turn off the sound before turning on the next
     for (int i=MP3TRIGGER; i<=IdleSound; i++) {
         Serial.print(i);
-        digitalWrite(i, HIGH); // "donothing"
+        //digitalWrite(i, HIGH); // "donothing"
         // digitalWrite(i, LOW); // pullup off
         // pinMode(i, INPUT); // "open"==pull-up=="donothing"
         }
     Serial.println();
 
-    digitalWrite(want_pin, LOW); // HIGH is "nothing", LOW is "trigger"
+    //digitalWrite(want_pin, LOW); // HIGH is "nothing", LOW is "trigger"
     Serial.print("->");Serial.println(want_pin);
 }
 
