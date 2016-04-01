@@ -86,9 +86,6 @@ void mp3_ask(const char *msg, const char *cmd) {
     Serial.println();
 }
 
-void loop() {
-        player.rand_play();
-        }
 
 void Player::rand_play() {
     // you should repeatedly call this, and it will play the next random sound when the previous finishes
@@ -102,7 +99,7 @@ void Player::rand_play() {
     if (was_sound_list != sound_list) {
         this->was_sound_list = sound_list; // a flag, so we know if we have to re-start
         this->sound_idx = random(sound_len);
-        Serial.print("First idx from ");Serial.print(sound_list);Serial.print(" -> ");Serial.println(sound_idx);
+        Serial.print(millis()); Serial.print("First idx from ");Serial.print(sound_list);Serial.print(" -> ");Serial.println(sound_idx);
         MP3.print("T");MP3.print( sound_list[sound_idx] );
         return;
         }
@@ -111,9 +108,10 @@ void Player::rand_play() {
     if (MP3.available() < 1) { return; }
 
     // Expect an 'X' for "done"
+    // We will get a 'x' when we change sounds() (on the next rand_play()), which is ok
     char v = MP3.read();
     if (v != 'X') {
-        Serial.print("mp3 didn't finish: ");Serial.println(v);
+        Serial.print(millis()); Serial.print(" mp3 didn't finish: ");Serial.println(v);
         return;
         }
 
@@ -122,12 +120,12 @@ void Player::rand_play() {
     // mod so back to 0..2 (being not the original sound_idx), 
     // and index is 0 based so done
     this->sound_idx = ( sound_idx + (random(sound_len - 1) + 1)) % sound_len;
-    Serial.print("Next idx ");Serial.println(sound_idx);
+    Serial.print(millis()); Serial.print(" Next idx ");Serial.println(sound_idx);
 
     MP3.print("T");MP3.print( sound_list[sound_idx] );
 }
 
-void xloop() {
+void loop() {
 
     bool p1 = Pir1.check();
     bool p2 = Pir2.check();
@@ -137,41 +135,23 @@ void xloop() {
     // idle, det1 -> "intro sound"
     // det1 + det2 -> vigorous
     // det1&det2 - det1 -> bye-sound
+    // NB: this immediately changes the sound
+    // But, some states may be short
     if (p1 && p2) {
         // ON
-        digitalWrite(ONBOARD,HIGH);
+        digitalWrite(ONBOARD, HIGH);
+        player.sounds("1");
     }
     else if (p1 || p2) {
         digitalWrite(ONBOARD, ((millis()/300) % 2) ? HIGH : LOW);
-        reset_to_sound(MP3TRIGGER);
+        player.sounds("2");
     }
     else {
         digitalWrite(ONBOARD,LOW);
-        reset_to_sound(IdleSound);
+        player.sounds("567");
     }
-}
 
-void reset_to_sound(int want_pin) {
-    static int last_pin = 0;
-
-    // Avoid doing anything if no change
-    if (last_pin == want_pin) { return; }
-
-    Serial.print("Pin ");Serial.print(want_pin);Serial.print(" was ");Serial.println(last_pin);
-
-    last_pin = want_pin;
-
-    // Have to turn off the sound before turning on the next
-    for (int i=MP3TRIGGER; i<=IdleSound; i++) {
-        Serial.print(i);
-        //digitalWrite(i, HIGH); // "donothing"
-        // digitalWrite(i, LOW); // pullup off
-        // pinMode(i, INPUT); // "open"==pull-up=="donothing"
-        }
-    Serial.println();
-
-    //digitalWrite(want_pin, LOW); // HIGH is "nothing", LOW is "trigger"
-    Serial.print("->");Serial.println(want_pin);
+    player.rand_play();
 }
 
 bool Pir::check() {
