@@ -10,8 +10,10 @@ extern void *__brkval;
 
 const int PIR1_PIN=2;
 const int PIR2_PIN=4;
-const int PirDebounceOn = 600; // millis
-const int PirDebounceOff = 1000; // millis till it allows -> Off
+// const int PirDebounceOn = 400; // millis
+// const int PirDebounceOff = 300; // millis till it allows -> Off
+const int PirWaitOn = 90; // I see 90ms pulses when motion is borderline, longer == on
+const int PirWaitOff = 300; // during movement, I see oscillation from on->off, with off <~ 300ms
 
 const int ONBOARD=13; // the on-board led for subtle signalling: ON=1&2, blink=1||2, off=no movement
 const int RX=10, TX=11; // for the MP3 board
@@ -33,17 +35,23 @@ struct Player {
     };
 
 enum Pir_State { Off, WaitOn, On, WaitOff };
-const int PirNothing = 1; // from digitalRead(pir)
-const int PirMovement = 0; // from digitalRead(pir)
+// const int PirNothing = 1; // from digitalRead(pir)
+// const int PirMovement = 0; // from digitalRead(pir)
+
+enum PirMachineStates { IDLE, WAIT_ON, ACTIVE, WAIT_OFF };
+
 struct Pir {
     int pin;
-    Pir_State pir_state;
-    unsigned long wait_on, wait_off; // don't need init
-    int was; // last digitalRead, PirNothing || PirMovement
+    PirMachineStates machine_state;
+    bool state;
+    unsigned long last_state_time;
+    // unsigned long last_change, last_pir_change; // // wait_on, wait_off; // don't need init
+    int was;
 
-    Pir(int a_pin) : pin(a_pin), pir_state(Off), was(-1) {}
+    Pir(int a_pin) : pin(a_pin), state(false), was(-1), last_state_time(0) {}
     void init() { pinMode(pin, INPUT_PULLUP); }
     bool check();
+
 };
 
 
@@ -176,6 +184,7 @@ char mp3_ask(const char *msg, const char *cmd) {
 
 
 void Player::rand_play(const int* sound_list) {
+    return;
     // you should repeatedly call this, and it will play the next random sound when the previous finishes
 
     int sound_len; // delay calculating
@@ -244,8 +253,170 @@ void loop() {
 }
 
 bool Pir::check() {
+    // "debounce"/interpret for "at range"
+    /* 
+        --simplified--
+        IDLE (off):
+            <stay>
+            move (WAIT_ON)
+                <stay>
+                dead -> OFF IDLE
+                >90 -> ACTIVE,on // ignore fast changes from idle
+                    ACTIVE:
+                        <stay>
+                        dead (WAIT_OFF)
+                            move -> ON ACTIVE
+                            >300 -> OFF IDLE
+    */
+
+    unsigned long now = millis();
+    bool movement = digitalRead(pin) == 0;
+
+    // even if no change since last pin-read, we have to check elapsed time in a state, etc, so:
+
+    switch (machine_state) {
+        case IDLE:
+            if (movement) {
+                last_state_time = now;
+                machine_state = WAIT_ON; // might go on
+            }
+            // otherwise, stay IDLE
+            break;
+
+        case WAIT_ON:
+            // we've seen "movement", but is it real?
+            if (movement) {
+                if (now - last_state_time > PirWaitOn) {
+                    last_state_time = now;
+                    machine_state = ACTIVE;
+                    state = true;
+                    }
+                // otherwise, waiting for on/off
+                }
+            else {
+                machine_state = IDLE; // return to IDLE if not on long enough
+                last_state_time = now;
+                }
+            break;
+
+        case ACTIVE:
+            // (if elapsed > 500 with no "off" in-between, the movement was really close to the detector)
+            if (!movement) {
+                last_state_time = now;
+                machine_state = WAIT_OFF;
+                }
+            // otherwise, stay on
+            break;
+
+        case WAIT_OFF:
+            if (movement) {
+                last_state_time = now;
+                machine_state = ACTIVE; // back to active
+                }
+            else if (now - last_state_time > PirWaitOff) {
+                last_state_time = now;
+                machine_state = IDLE;
+                state = false;
+                }
+            // otherwise, wait for movement or time
+            break;
+
+    }
+}
+
+/*
+bool Pir::x_fancycheck() {
+    // Not finished
+    // returns true if "on"
+    / *
+        for distance:
+        if we are stabily off, any ~>90 signal means on
+            then we'll see off/on at about 300ms during motion
+            a sequence of off, 1ms, on, 1ms, off means end-of-motion
+                often followed by <90 pulses
+            if you don't see the rapid on/off, you might see off,...on, <80, off as the end signal
+            otherwise off for >300 or so means off
+        close motion causes 500ms on/off or more
+
+        .state=..., .detected=on/off, .last_signal, .last_signal_time
+        IDLE (off):
+            <stay>
+            move
+                ~>90 -> ON (fast-on)
+                    <stay>
+                    ~>500 then "close"
+                    nothing
+                        ~300 & move -> ON (continuing)
+                        ~1 & move
+                            ~1 & dead -> OFF (rapid)
+                                ~<90 move/dead's waiting for stabilized OFF -> IDLE
+                                ~>100 -> OFF -> IDLE
+                        move & <80 & dead -> OFF (medium) -> IDLE
+
+    * /
+
+    int pirVal = digitalRead(pin);
+    unsigned long now = millis();
+
+    if (was != pirVal) {
+        Serial.print("[");Serial.print(pin);Serial.print("] ");Serial.print(now);Serial.print(" d");Serial.print(now - last_pir_change); Serial.print(": ");
+        Serial.print(pirVal); Serial.print(" "); Serial.println(pir_state);
+        was = pirVal;
+        last_pir_change = now;
+        }
+
+    switch ( pir_state ) {
+        case Off:
+            if (pirVal == PirMovement && now-last_change > PirMinOff ) {
+                pir_state = WaitOn;
+                last_change = now; // not pirVal change, state change
+            }
+            // otherwise, nothing -> stay off
+            break;
+
+        case WaitOn:
+            // filter out short on pulses
+            if (pirVal == PirMovement && now-last_change > PirWaitOn ) {
+                pir_state = WaitOn;
+                Serial.print("[");Serial.print(pin);Serial.print("] ");Serial.print(now); Serial.print(" d");Serial.print(now-last_change);Serial.print(": ");
+                Serial.println("    on");
+                // leave last_change: count from begining of on signal
+            }
+            else {
+                pir_state = Off;
+                last_change = now; // noise went away
+            }
+            break;
+
+        case On:
+            if (pirVal == PirNothing)
+                pir_state = WaitOff; // any number of variants for off
+                // no last_change
+            }
+            // otherwise, movement -> stay on
+            break;
+
+        case WaitOff:
+            if (pirVal == PirNothing) {
+               if > 400, OFF 
+            }
+
+            else {
+                back to on:
+                if < 2, then WaitRapidOff
+                if < 300, then WaitMediumOff (wait for off < 90==off)
+            }
+
+    }
+    return pir_state == On || pir_state = WaitOff;
+}
+*/
+
+/*
+bool Pir::check_v1() {
     // returns true if "on"
     int pirVal = digitalRead(pin);
+    static unsigned long last_change  = 0;
 
     // FIXME: debounce may be wrong: maybe more like average state (1->0->1->0... seems common during motion)
     // States: debounce on / off
@@ -299,9 +470,11 @@ bool Pir::check() {
     }
 
     if (was != pirVal) {
-        Serial.print("[");Serial.print(pin);Serial.print("] ");Serial.print(millis()); Serial.print(": ");Serial.print(pirVal); Serial.print(" "); Serial.println(pir_state);
+        Serial.print("[");Serial.print(pin);Serial.print("] ");Serial.print(millis()); Serial.print(": ");Serial.print(pirVal); Serial.print(" "); Serial.print(pir_state);Serial.print(" d");Serial.println(millis() - last_change);
         was = pirVal;
+        last_change = millis();
         }
 
     return pir_state == On || pir_state == WaitOff;
 }
+*/
