@@ -16,7 +16,7 @@ const int PirWaitOn = 90; // I see 90ms pulses when motion is borderline, longer
 const int PirWaitOff = 300; // during movement, I see oscillation from on->off, with off <~ 300ms
 
 const int ONBOARD=13; // the on-board led for subtle signalling: ON=1&2, blink=1||2, off=no movement
-const int RX=10, TX=11; // for the MP3 board
+const int RX=10, TX=11; // for the MP3 board (opposite designation on mp3board)
 
 // Each "zone" of movement (can have several sounds, will be randomly chosen/looped among)
 // See MovementSound, and setup_sound_lists()
@@ -184,7 +184,6 @@ char mp3_ask(const char *msg, const char *cmd) {
 
 
 void Player::rand_play(const int* sound_list) {
-    return;
     // you should repeatedly call this, and it will play the next random sound when the previous finishes
 
     int sound_len; // delay calculating
@@ -226,8 +225,11 @@ void Player::rand_play(const int* sound_list) {
 
 void loop() {
 
+    if (Serial.available()>0) { handle_commands(); }
+
     bool p1 = Pir1.check();
     bool p2 = Pir2.check();
+    // if (p1||p2) {Serial.print("<");Serial.print(p1);Serial.print(",");Serial.print(p2);Serial.println(">");}
 
     // We want a progression of sounds:
     // idle -> idle sound
@@ -250,6 +252,69 @@ void loop() {
         player.rand_play(IdleSounds);
     }
 
+}
+
+void handle_commands() {
+    // for serial-console debugging
+
+    static unsigned char command = '?'; // default is show prompt
+
+    // stay in loop while data or "because we want to"
+    while (Serial.available() >0 || command >= 0xfe || command == '?') {
+        if (Serial.available() > 0) command = Serial.read();
+        switch (command) {
+            // set command to '?' to display menu w/prompt
+            // set command to 0xff to prompt
+            // set command to 0xfe to just get input
+
+            case 'i': // play idle sounds
+                player.rand_play(IdleSounds);
+                command = 0xff;
+                break;
+
+            case 'x': // back to regular operation
+                return;
+                break;
+            
+            case '1':  // ..9 play sound n
+            case '2': 
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                MP3.print("T");MP3.print( (char) command );
+                command = 0xff;
+                break;
+
+            case '?':
+                // menu made by:
+    Serial.println(F("a  your command (this is desc)"));
+    Serial.println(F("1  ..'9' play sound n"));
+                // end menu
+
+            case 0xff : // show prompt, get input
+              Serial.print(F("Choose (? for help): "));
+              // fallthrough
+
+            case 0xfe : // just get input
+              while (Serial.available() <= 0) {
+                if (MP3.available()>0) {Serial.print("MP3: ");Serial.println( (char) MP3.read() ); }
+                };
+              break;
+
+              command = Serial.read();
+              Serial.println(command);
+              break;
+
+            default : // show help if not understood
+              delay(10); while(Serial.available() > 0) { Serial.read(); delay(10); } // empty buffer
+              command = '?';
+              break;
+        }
+    }
 }
 
 bool Pir::check() {
@@ -322,6 +387,7 @@ bool Pir::check() {
             break;
 
     }
+    return this->state;
 }
 
 /*
