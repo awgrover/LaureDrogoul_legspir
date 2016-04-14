@@ -16,7 +16,7 @@ const int PirWaitOn = 90; // I see 90ms pulses when motion is borderline, longer
 const int PirWaitOff = 300; // during movement, I see oscillation from on->off, with off <~ 300ms
 
 const int ONBOARD=13; // the on-board led for subtle signalling: ON=1&2, blink=1||2, off=no movement
-const int RX=10, TX=11; // for the MP3 board (opposite designation on mp3board)
+const int RX=5, TX=6; // for the MP3 board (opposite designation on mp3board)
 
 // Each "zone" of movement (can have several sounds, will be randomly chosen/looped among)
 // See MovementSound, and setup_sound_lists()
