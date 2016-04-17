@@ -27,6 +27,7 @@ const int IdleSoundCount = 3; // how many sounds for idling
 
 
 // see https://learn.sparkfun.com/tutorials/mp3-trigger-hookup-guide-v24
+// https://cdn.sparkfun.com/datasheets/Widgets/vs1063ds.pdf
 struct Player {
     const int* was_sound_list = (const int*) -1; // so it starts different from sound_list
     int sound_idx;
