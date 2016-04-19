@@ -18,10 +18,11 @@ const int PirWaitOff = 300; // during movement, I see oscillation from on->off, 
 const int ONBOARD=13; // the on-board led for subtle signalling: ON=1&2, blink=1||2, off=no movement
 const int RX=5, TX=6; // for the MP3 board (opposite designation on mp3board)
 
+// SOUND Defn
 // Each "zone" of movement (can have several sounds, will be randomly chosen/looped among)
 // See MovementSound, and setup_sound_lists()
 const int MovementSoundCounts[] = {1,1,1,0}; // how many sounds in each "zone", terminate list with 0
-// Idle sounds, start at last_movement_sound + 2 (there's a gap)
+// Idle sounds, start at last_movement_sound + 2 (there's a gap) (file names are 001...)
 // see IdleSounds, and setup_sound_lists()
 const int IdleSoundCount = 3; // how many sounds for idling
 
